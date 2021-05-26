@@ -4,6 +4,8 @@ from flask_mysqldb import MySQL
 from datetime import datetime
 import MySQLdb.cursors
 import re
+from flask import jsonify
+
 
 app = Flask(__name__)
 #app.config['SECRET_KEY'] = 'abiduduidudu'
@@ -77,18 +79,36 @@ def managerLogin():
 
     return render_template('login.html', msg=msg)
 
-
 @app.route("/userHome", methods=['GET', 'POST'])
 def userHome():
     return render_template("userhome.html")
 
-@app.route('/userInteractionofaDrug')
+@app.route("/userInteractionofaDrug", methods=['GET', 'POST'])
 def userInteractionofaDrug():
-	return render_template('userInteractionofaDrug.html')
+    msg =''
+    if request.method == 'POST' and 'main_drug' in request.form:
+        # Create variables for easy access
+        main_drug = request.form['main_drug']
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute('SELECT interacting_drug FROM Drug_Interaction WHERE main_drug =%s', (main_drug))
+        return jsonify(data=cursor.fetchall())
+    else:
+        msg = 'There is no such drug'
 
-@app.route('/userAction2')
+    return render_template('userInteractionofaDrug.html', msg=msg)
+
+@app.route('/userAction2', methods=['GET', 'POST']) 
 def userAction2():
-	return render_template('userAction2.html')
+    msg =''
+    if request.method == 'POST' and 'drug_id' in request.form:
+        # Create variables for easy access
+        drug_id = request.form['drug_id']
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute('SELECT * FROM DRUGBANK WHERE drug_id =%s', (drug_id))
+        return jsonify(data=cursor.fetchall())
+    else:
+        msg = 'There is no such drug'
+    return render_template('userAction2.html', msg=msg)
 
 @app.route('/userAction3')
 def userAction3():
