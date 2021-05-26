@@ -110,9 +110,21 @@ def userAction2():
         msg = 'There is no such drug'
     return render_template('userAction2.html', msg=msg)
 
-@app.route('/userAction3')
-def userAction3():
-	return render_template('userAction3.html')
+
+@app.route('/userdrugSideEffects', methods=['GET', 'POST']) 
+def userdrugSideEffects():
+    msg =''
+    if request.method == 'POST' and 'drug_id' in request.form:
+        # Create variables for easy access
+        drug_id = request.form['drug_id']
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute('SELECT SIDER.drug_id, SideEffect.side_effect_name FROM SideEffect INNER JOIN SIDER ON SIDER.umls_cui=SideEffect.umls_cui WHERE SIDER.drug_id=%s', (drug_id))
+        return jsonify(data=cursor.fetchall())
+    else:
+        msg = 'There is no such drug'
+    return render_template('userdrugSideEffects.html', msg=msg)    
+
+    
 
 @app.route('/userAction4')
 def userAction4():
