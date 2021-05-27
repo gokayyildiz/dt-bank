@@ -6,15 +6,15 @@
   </head>
   <body>
     <div class="container">
-      <h1>Please type a drug id</h1>
+      <h1>Please type a drug id to get the interacting drugs.</h1>
       <br>
       <form action="" method="post">
         <input type="text" placeholder="main_drug" name="main_drug" value="{{
           request.form.main_drug }}">
-        <input class="btn btn-default" type="submit" value="Login">
+        <input class="btn btn-default" type="submit" value="Go!">
       </form>
       {% if error %}
-        <p class="error"><strong>Error:</strong> {{ error }}
+        <p class="error"><strong>Error:</strong> {{ aerror }}
       {% endif %}
     </div>
   </body>
