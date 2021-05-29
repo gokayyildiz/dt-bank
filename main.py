@@ -138,7 +138,118 @@ def userInteractingDrugsforSpecProt():
         msg = 'There is no such drug'
     return render_template('userInteractingDrugsforSpecProt.html', msg=msg)        
 
- 
+@app.route('/user13', methods=['GET', 'POST'])
+def user13():
+    msg =''
+    if request.method == 'POST':
+        # Create variables for easy access
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute('SELECT DISTINCT Uniprot.uniprot_id, BindingDB.drug_id FROM UniProt LEFT JOIN BindingDB ON Uniprot.uniprot_id = BindingDB.uniprot_id ORDER BY uniprot_id ASC, drug_id ASC')
+        return jsonify(data=cursor.fetchall())
+    else:
+        msg = 'There is no such drug'
+    return render_template('user13.html', msg=msg)        
+
+@app.route('/user14', methods=['GET', 'POST'])
+def user14():
+    msg =''
+    if request.method == 'POST':
+        # Create variables for easy access
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute('SELECT  Drugbank.drug_id, BindingDB.uniprot_id FROM Drugbank LEFT JOIN BindingDB ON Drugbank.drug_id = BindingDB.drug_id ORDER BY drug_id ASC, uniprot_id ASC')
+        return jsonify(data=cursor.fetchall())
+    return render_template('user14.html', msg=msg)  
+
+@app.route('/user15', methods=['GET', 'POST'])
+def user15():
+    msg =''
+    if request.method == 'POST' and 'umls_cui' in request.form:
+        # Create variables for easy access
+        umls_cui = request.form['umls_cui']
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute('SELECT Drugbank.drug_id, Drugbank.drug_name FROM SIDER INNER JOIN Drugbank ON Drugbank.drug_id = SIDER.drug_id WHERE SIDER.umls_cui = %s', [umls_cui])
+        return jsonify(data=cursor.fetchall())
+    else:
+        msg = 'There is no such drug'
+    return render_template('user15.html', msg=msg)    
+
+@app.route('/user16', methods=['GET', 'POST'])
+def user16():
+    msg =''
+    if request.method == 'POST' and 'keyword' in request.form:
+        # Create variables for easy access
+        keyword = request.form['keyword']
+        keyword = "%"+keyword+"%"
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute('SELECT * FROM Drugbank WHERE description_ LIKE %s', [keyword])
+        return jsonify(data=cursor.fetchall())
+    else:
+        msg = 'There is no such drug'
+    return render_template('user16.html', msg=msg)   
+
+@app.route('/user17', methods=['GET', 'POST'])
+def user17():
+    msg =''
+    if request.method == 'POST' and 'uniprot_id' in request.form:
+        # Create variables for easy access
+        uniprot_id = request.form['uniprot_id']
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute('select drug_id, count(*) as total from ' 
+                        '(select distinct SIDER.drug_id,SIDER.umls_cui,'
+                        'uniprot_id from SIDER '
+                        'INNER JOIN BindingDB '
+                        'ON SIDER.drug_id=BindingDB.drug_id '
+                        'WHERE uniprot_id = %s) as b '
+                        'group by drug_id '
+                        'having total in ( '
+                        'select min(total) from (select '
+                        'count(*) as total from '
+                        '(select distinct SIDER.drug_id,SIDER.umls_cui,'
+                        'uniprot_id from SIDER '
+                        'INNER JOIN BindingDB '
+                        'ON SIDER.drug_id=BindingDB.drug_id '
+                        'WHERE uniprot_id = %s) as b2 '
+                        'group by drug_id)as b3)', (uniprot_id,uniprot_id))
+        return jsonify(data=cursor.fetchall())
+    else:
+        msg = 'There is no such drug'
+    return render_template('user17.html', msg=msg)   
+
 
 if __name__=='__main__':
     app.run(debug=True)
+
+
+"""
+13
+SELECT DISTINCT Uniprot.uniprot_id, BindingDB.drug_id FROM UniProt 
+LEFT JOIN BindingDB ON Uniprot.uniprot_id = BindingDB.uniprot_id
+14
+SELECT  Drugbank.drug_id, BindingDB.uniprot_id FROM Drugbank 
+LEFT JOIN BindingDB ON Drugbank.drug_id = BindingDB.drug_id
+15
+SELECT Drugbank.drug_id, Drugbank.drug_name FROM SIDER 
+INNER JOIN Drugbank 
+ON Drugbank.drug_id = SIDER.drug_id
+WHERE SIDER.umls_cui = %s
+16
+SELECT * FROM
+Drugbank WHERE description_ LIKE '%{dummy string}%'
+17
+select drug_id, count(*) as total from 
+(select distinct SIDER.drug_id,SIDER.umls_cui,
+uniprot_id from SIDER
+INNER JOIN BindingDB
+ON SIDER.drug_id=BindingDB.drug_id
+WHERE uniprot_id = 'uni1') as b
+group by drug_id
+having total in (
+select min(total) from (select 
+count(*) as total from 
+(select distinct SIDER.drug_id,SIDER.umls_cui,
+uniprot_id from SIDER
+INNER JOIN BindingDB
+ON SIDER.drug_id=BindingDB.drug_id
+WHERE uniprot_id = 'uni1') as b2
+group by drug_id)as b3)
+"""
