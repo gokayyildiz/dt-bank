@@ -1,5 +1,5 @@
 
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session,  Response
 from flask_mysqldb import MySQL
 from datetime import datetime
 import MySQLdb.cursors
@@ -14,8 +14,8 @@ app = Flask(__name__)
 app.secret_key = 'my number one'
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = 'Orac135421'
-app.config['MYSQL_DB'] = 'pythonlogin'
+app.config['MYSQL_PASSWORD'] = 'abc123'
+app.config['MYSQL_DB'] = 'sample'
 
 mysql = MySQL(app)
 
@@ -71,7 +71,7 @@ def managerLogin():
             session['username'] = account['username']
             session['password'] = account['password']
             # Redirect to home page
-            return 'Logged in successfully!'
+            return redirect(url_for('managerHome'))
         else:
             # Account doesnt exist or username/password incorrect
             msg = 'Incorrect username/password!'
@@ -82,6 +82,30 @@ def managerLogin():
 @app.route("/userHome", methods=['GET', 'POST'])
 def userHome():
     return render_template("userhome.html")
+
+@app.route("/managerHome", methods=['GET', 'POST'])
+def managerHome():
+    return render_template("managerhome.html")
+
+@app.route("/addUser", methods=['GET', 'POST'])
+def addUser():
+
+    if request.method == 'POST' and 'username' in request.form and 'password' in request.form and 'name' in request.form and 'institution' in request.form:
+        # Create variables for easy access
+        username = request.form['username']
+        password = request.form['password']
+        name = request.form['name']
+        institution = request.form['institution']
+        con = mysql.connection
+        cursor = con.cursor(MySQLdb.cursors.DictCursor)
+        try:
+            cursor.execute("INSERT INTO Users(username, name, institution, password) VALUES (%s,%s,%s,%s)", (username, name, institution, password))
+            con.commit()
+            return ("<h1>Insertion Succesful</h1>")
+        except Exception as err:
+            return Response(str(err), status=403)
+
+    return render_template('addUser.html')   
 
 @app.route("/userInteractionofaDrug", methods=['GET', 'POST'])
 def userInteractionofaDrug():
