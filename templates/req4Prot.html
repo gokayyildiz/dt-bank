@@ -1,0 +1,22 @@
+<html>
+  <head>
+    <title> Manager Page</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="static/bootstrap.min.css" rel="stylesheet" media="screen">
+  </head>
+  <body>
+    <div class="container">
+      <h1>Please enter the ID of the protein that you'd like to delete</h1>
+      <br>
+      <form action="" method="post">
+        <input type="text" placeholder="uniprot_id" name="uniprot_id" value="{{
+          request.form.uniprot_id }}">
+        
+        <input class="btn btn-default" type="submit" value="Delete">
+      </form>
+      {% if error %}
+        <p class="error"><strong>Error:</strong> {{ error }}
+      {% endif %}
+    </div>
+  </body>
+</html>
