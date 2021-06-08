@@ -14,8 +14,8 @@ app = Flask(__name__)
 app.secret_key = 'my number one'
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = 'abc123'
-app.config['MYSQL_DB'] = 'sample'
+app.config['MYSQL_PASSWORD'] = 'Orac135421'
+app.config['MYSQL_DB'] = 'pythonlogin'
 
 mysql = MySQL(app)
 
@@ -33,17 +33,19 @@ def about():
 @app.route("/userLogin", methods=['GET', 'POST'])
 def userLogin():
     msg =''
-    if request.method == 'POST' and 'username' in request.form and 'password' in request.form:
+    if request.method == 'POST' and 'username' in request.form and 'password' in request.form and 'institution' in request.form:
         # Create variables for easy access
         username = request.form['username']
         password = request.form['password']
+        institution = request.form['institution']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute('SELECT * FROM users WHERE username = %s AND password = %s', (username, password,))
+        cursor.execute('SELECT * FROM users WHERE username = %s AND password = %s AND institution = %s', (username, password,institution))
         account = cursor.fetchone()
         if account:
             # Create session data, we can access this data in other routes
             session['loggedin'] = True
             session['username'] = account['username']
+            session['institution'] = account['institution']
             session['password'] = account['password']
             # Redirect to home page
             return redirect(url_for('userHome'))
@@ -52,7 +54,7 @@ def userLogin():
             msg = 'Incorrect username/password!'
 
 
-    return render_template('login.html', msg=msg)
+    return render_template('userlogin.html', msg=msg)
 
 
 @app.route("/managerLogin", methods=['GET', 'POST'])
@@ -63,7 +65,7 @@ def managerLogin():
         username = request.form['username']
         password = request.form['password']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute('SELECT * FROM databasemanager WHERE username = %s AND password = %s', (username, password,))
+        cursor.execute('SELECT * FROM databasemanager WHERE username = %s AND password = %s', (username, password))
         account = cursor.fetchone()
         if account:
             # Create session data, we can access this data in other routes
@@ -77,7 +79,7 @@ def managerLogin():
             msg = 'Incorrect username/password!'
 
 
-    return render_template('login.html', msg=msg)
+    return render_template('managerlogin.html', msg=msg)
 
 @app.route("/userHome", methods=['GET', 'POST'])
 def userHome():
@@ -117,12 +119,12 @@ def req3Affinity():
         con = mysql.connection
         cursor = con.cursor(MySQLdb.cursors.DictCursor)
         
-        cursor.execute('SELECT reaction_research.reaction_id FROM reaction_research WHERE reaction_id = {}'.format(reaction_id))
+        cursor.execute('SELECT reaction_research.reaction_id FROM reaction_research WHERE reaction_id = "{}"'.format(reaction_id))
         if cursor.fetchone() is None:
             return "<h1>Given reaction not found</h1>"
         
         try:
-            cursor.execute('UPDATE reaction_research SET affinity ={} WHERE reaction_id ={}'.format(affinity, reaction_id))
+            cursor.execute('UPDATE reaction_research SET affinity ={} WHERE reaction_id ="{}"'.format(affinity, reaction_id))
             con.commit()
             return ("<h1>Update Succesful</h1>")
         except Exception as err:
@@ -170,6 +172,60 @@ def deleteProtein():
             return Response(str(err), status=403)       
 
     return render_template('req4Prot.html')  
+
+@app.route("/req5insertUser", methods=['GET', 'POST'])
+def req5insertUser():
+    if request.method == 'POST' and 'reaction_id' in request.form and 'username' in request.form and 'name' in request.form and 'password' in request.form  :
+        # Create variables for easy access
+        reaction_id = request.form['reaction_id']
+        username = request.form['username']
+        name = request.form['name']
+        password = request.form['password']
+        con = mysql.connection
+        cursor = con.cursor(MySQLdb.cursors.DictCursor)
+        
+        cursor.execute("""SELECT U.institution, username, password, name from 
+                            (SELECT DISTINCT @institution := C.institution FROM Contribution_Paper C, Reaction_Research R WHERE
+                            C.doi = R.doi and R.reaction_id = '{}') as t1, Users U
+                            WHERE U.institution = @institution and
+                            username = '{}' and password='{}' and   
+                            name = '{}' """.format(reaction_id,username,password,name))
+                   
+        if cursor.fetchone() is None: #eğer buraya girerse yeni user oluşturcaz eğeeeer ki bu user başka bi inst ile kayıtlıysa hata, değilse ekle                     
+            cursor.execute("""call createUserandPaper('{}','{}','{}','{}')""".format(username,password,name,reaction_id))
+            con.commit()
+            return "<h1>New user has created and inserted to the paper </h1>"
+    
+        else:  #burda usera eklemeden ekle       
+            cursor.execute("""SELECT DISTINCT @inst:=institution, @doi:=R.doi FROM Contribution_Paper C, Reaction_Research R WHERE
+                            C.doi = R.doi and R.reaction_id = '{}'; INSERT INTO Contribution_Paper 
+                            Values ('{}',@inst, @doi)""".format(reaction_id,username),multi=True)       
+                                               
+            return "<h1>User inserted to the paper<h1>"                
+ 
+    return render_template('req5insertUser.html')  
+
+#acaba burda passwordler falan neden veriliyor? 
+
+
+@app.route("/req5deleteUser", methods=['GET', 'POST'])
+def req5deleteUser():
+    if request.method == 'POST' and 'reaction_id' in request.form and 'username' in request.form and 'name' in request.form and 'password' in request.form  :
+        # Create variables for easy access
+        reaction_id = request.form['reaction_id']
+        username = request.form['username']
+        name = request.form['name']
+        password = request.form['password']
+        con = mysql.connection
+        cursor = con.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("""select @doi:=C.doi from contribution_paper C, Reaction_Research R where R.doi=C.doi 
+                        and username = '{}' and reaction_id = '{}';
+                        delete from Contribution_Paper where doi=@doi and username='{}'""".format(username,reaction_id,username))
+        return ("<h1>deletion successful<h1>")      
+
+    return render_template('req5deleteUser.html')  
+
+
 
 #see users ?
 @app.route("/managerSeeUsers", methods=['GET', 'POST'])
@@ -424,11 +480,46 @@ def userSeePapers():
  
     return jsonify(data=cursor.fetchall())
 
+@app.route("/userSeeRankings", methods=['GET'])
+def userSeeRankings():
+    con = mysql.connection
+    cursor = con.cursor(MySQLdb.cursors.DictCursor)
+    try:
+        cursor.execute("""select * from institutions order by points desc""")
+    except Exception as err:
+        return Response(str(err), status=403)  
+ 
+    return jsonify(data=cursor.fetchall())
+
+
+
+@app.route('/userSeeFilteredTargets', methods=['GET', 'POST'])
+def userSeeFilteredTargets():
+    msg =''
+    if request.method == 'POST' and 'measure_type' in request.form and 'min_affinity' in request.form and 'max_affinity' in request.form and 'drug_id' in request.form:
+        # Create variables for easy access
+        measure_type = request.form['measure_type']
+        min_affinity= request.form['min_affinity']
+        max_affinity= request.form['max_affinity']
+        drug_id = request.form['drug_id']
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("""call getFilteredTargets('{}',{},{},{})""".format(measure_type, min_affinity,max_affinity,drug_id))
+        return jsonify(data=cursor.fetchall())
+    else:
+        msg = 'Parameters are not suitably provided!'
+    return render_template('userSeeFilteredTargets.html', msg=msg)   
+
 if __name__=='__main__':
     app.run(debug=True)
 
 
 """
+call getSuitableTargets
+...
+select * from BindingDB B, uniprot U, Reaction_research R
+where B.uniprot_id=U.uniprot_id and R.reaction_id = B.reaction_id
+and measure = 'measue_type' and affinity > 'min_affinity' and 
+affinity < 'max_affinity'
 13
 SELECT DISTINCT Uniprot.uniprot_id, BindingDB.drug_id FROM UniProt 
 LEFT JOIN BindingDB ON Uniprot.uniprot_id = BindingDB.uniprot_id

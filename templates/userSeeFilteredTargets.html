@@ -1,0 +1,27 @@
+<html>
+  <head>
+    <title>Flask Intro - Interactions of Drugs page</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="static/bootstrap.min.css" rel="stylesheet" media="screen">
+  </head>
+  <body>
+    <div class="container">
+      <h1>Please type a uniprot_id to get the drugs</h1>
+      <br>
+      <form action="" method="post">
+        <input type="text" placeholder="measure_type" name="measure_type" value="{{
+          request.form.measure_type }}">
+        <input type="text" placeholder="min_affinity" name="min_affinity" value="{{
+          request.form.min_affinity }}">     
+        <input type="text" placeholder="max_affinity" name="max_affinity" value="{{
+          request.form.max_affinity }}">          
+          <input type="text" placeholder="drug_id" name="drug_id" value="{{
+            request.form.drug_id }}">          
+        <input class="btn btn-default" type="submit" value="Go!">
+      </form>
+      {% if error %}
+        <p class="error"><strong>Error:</strong> {{ aerror }}
+      {% endif %}
+    </div>
+  </body>
+</html>
