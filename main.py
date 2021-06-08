@@ -184,29 +184,36 @@ def req5insertUser():
         con = mysql.connection
         cursor = con.cursor(MySQLdb.cursors.DictCursor)
         
-        cursor.execute("""SELECT U.institution, username, password, name from 
-                            (SELECT DISTINCT @institution := C.institution FROM Contribution_Paper C, Reaction_Research R WHERE
+        cursor.execute("""SELECT U.institution, username, password, name, doi from 
+                            (SELECT DISTINCT @institution := C.institution, C.doi FROM Contribution_Paper C, Reaction_Research R WHERE
                             C.doi = R.doi and R.reaction_id = '{}') as t1, Users U
                             WHERE U.institution = @institution and
                             username = '{}' and password='{}' and   
                             name = '{}' """.format(reaction_id,username,password,name))
-                   
-        if cursor.fetchone() is None: #eğer buraya girerse yeni user oluşturcaz eğeeeer ki bu user başka bi inst ile kayıtlıysa hata, değilse ekle                     
-            cursor.execute("""call createUserandPaper('{}','{}','{}','{}')""".format(username,password,name,reaction_id))
+        decide =cursor.fetchone()
+        
+        if decide is not None:
+            institution=decide['institution']
+            doi = decide['doi']
+            cursor.execute("""INSERT INTO Contribution_Paper 
+                            Values ('{}','{}','{}') """.format(username,institution,doi))
+            con.commit()                
+            return ("Insertion is successful, no need to create a new user")
+
+        else: #seeam seam burası boşsa şimdik user da yarataceuz
+            cursor.execute("""select distinct C.doi, R.reaction_id, C.institution from 
+            Contribution_Paper C, Reaction_Research R where C.doi=R.doi and R.reaction_id = '{}'; """.format(reaction_id))
+            case2=cursor.fetchone()
+            doi=case2['doi']
+            institution=case2['institution']
+            print(case2)
+            cursor.execute("""insert into users values ('{}','{}','{}','{}') """.format(username,name,institution,password))
+            cursor.execute("""insert into contribution_paper values ('{}','{}','{}')""".format(username,institution,doi))
             con.commit()
-            return "<h1>New user has created and inserted to the paper </h1>"
-    
-        else:  #burda usera eklemeden ekle       
-            cursor.execute("""SELECT DISTINCT @inst:=institution, @doi:=R.doi FROM Contribution_Paper C, Reaction_Research R WHERE
-                            C.doi = R.doi and R.reaction_id = '{}'; INSERT INTO Contribution_Paper 
-                            Values ('{}',@inst, @doi)""".format(reaction_id,username),multi=True)       
-                                               
-            return "<h1>User inserted to the paper<h1>"                
- 
+            return ("<h1>new user created, and inserted to the corresponding doi wrt the reaction_id<h1/>")
     return render_template('req5insertUser.html')  
 
 #acaba burda passwordler falan neden veriliyor? 
-
 
 @app.route("/req5deleteUser", methods=['GET', 'POST'])
 def req5deleteUser():
@@ -218,10 +225,21 @@ def req5deleteUser():
         password = request.form['password']
         con = mysql.connection
         cursor = con.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("""select @doi:=C.doi from contribution_paper C, Reaction_Research R where R.doi=C.doi 
-                        and username = '{}' and reaction_id = '{}';
-                        delete from Contribution_Paper where doi=@doi and username='{}'""".format(username,reaction_id,username))
-        return ("<h1>deletion successful<h1>")      
+        cursor.execute("""select distinct C.doi, R.reaction_id, C.institution from 
+        Contribution_Paper C, Reaction_Research R where C.doi=R.doi and R.reaction_id = '{}'; """.format(reaction_id))
+        case2=cursor.fetchone()
+        institution=case2['institution']
+        doi = case2['doi']
+        cursor.execute("""select * from users where username = '{}' and name = '{}' and 
+                        institution = '{}' 
+                        and password = '{}' """.format(username,name,institution,password))
+        if cursor.fetchone() is None:
+            return ("There is no such user to delete!")
+        else:    
+            cursor.execute("""delete from Contribution_Paper where 
+            username = '{}' and institution = '{}' and doi = '{}'""".format(username,institution,doi))
+            con.commit()
+            return ("<h1>deletion successful<h1>")      
 
     return render_template('req5deleteUser.html')  
 
