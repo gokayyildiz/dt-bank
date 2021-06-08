@@ -234,7 +234,7 @@ def req5deleteUser():
                         institution = '{}' 
                         and password = '{}' """.format(username,name,institution,password))
         if cursor.fetchone() is None:
-            return ("There is no such user to delete!")
+            return ("There is no such user and paper to delete!")
         else:    
             cursor.execute("""delete from Contribution_Paper where 
             username = '{}' and institution = '{}' and doi = '{}'""".format(username,institution,doi))
@@ -333,7 +333,7 @@ def seeDetailedDrug():
                             FROM (select d.drug_id AS dr1,  GROUP_CONCAT(e.side_effect_name SEPARATOR ', ') as side_effect_names
                             from drugbank as d, SIDER as s, sideeffect as e
                             where d.drug_id = s.drug_id and s.umls_cui = e.umls_cui
-                            GROUP BY d.drug_id) as X  LEFT JOIN (select  b.drug_id as dr2, GROUP_CONCAT(u.target_name SEPARATOR ', ') as target_names
+                            GROUP BY d.drug_id) as X  LEFT JOIN (select  b.drug_id as dr2, GROUP_CONCAT(DISTINCT u.target_name SEPARATOR ', ') as target_names
                             from bindingdb as b, uniprot as u
                             where b.uniprot_id = u.uniprot_id
                             group by b.drug_id) as Y ON X.dr1 = Y.dr2
@@ -342,7 +342,7 @@ def seeDetailedDrug():
                             FROM (select d.drug_id as dr1,  GROUP_CONCAT(e.side_effect_name SEPARATOR ', ') as side_effect_names
                             from drugbank as d, SIDER as s, sideeffect as e
                             where d.drug_id = s.drug_id and s.umls_cui = e.umls_cui
-                            GROUP BY d.drug_id) as X  RIGHT JOIN (select  b.drug_id as dr2, GROUP_CONCAT(u.target_name SEPARATOR ', ') as target_names
+                            GROUP BY d.drug_id) as X  RIGHT JOIN (select  b.drug_id as dr2, GROUP_CONCAT(DISTINCT u.target_name SEPARATOR ', ') as target_names
                             from bindingdb as b, uniprot as u
                             where b.uniprot_id = u.uniprot_id
                             group by b.drug_id) as Y ON X.dr1 = Y.dr2) AS Z ON d.drug_id = Z.dr1 OR d.drug_id = Z.dr2""")
@@ -409,24 +409,23 @@ def userInteractingDrugsforSpecProt():
 @app.route('/user13', methods=['GET', 'POST'])
 def user13():
     msg =''
-    if request.method == 'POST':
         # Create variables for easy access
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute('SELECT DISTINCT Uniprot.uniprot_id, BindingDB.drug_id FROM UniProt LEFT JOIN BindingDB ON Uniprot.uniprot_id = BindingDB.uniprot_id ORDER BY uniprot_id ASC, drug_id ASC')
-        return jsonify(data=cursor.fetchall())
-    else:
-        msg = 'There is no such drug'
-    return render_template('user13.html', msg=msg)        
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("""SELECT DISTINCT Uniprot.uniprot_id, GROUP_CONCAT(DISTINCT BindingDB.drug_id SEPARATOR ', ') as drugs 
+FROM UniProt LEFT JOIN BindingDB ON Uniprot.uniprot_id = BindingDB.uniprot_id 
+GROUP BY  Uniprot.uniprot_id""")
+    return jsonify(data=cursor.fetchall())
+      
 
 @app.route('/user14', methods=['GET', 'POST'])
 def user14():
-    msg =''
-    if request.method == 'POST':
         # Create variables for easy access
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute('SELECT  Drugbank.drug_id, BindingDB.uniprot_id FROM Drugbank LEFT JOIN BindingDB ON Drugbank.drug_id = BindingDB.drug_id ORDER BY drug_id ASC, uniprot_id ASC')
-        return jsonify(data=cursor.fetchall())
-    return render_template('user14.html', msg=msg)  
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("""SELECT  Drugbank.drug_id, GROUP_CONCAT(DISTINCT BindingDB.uniprot_id SEPARATOR ', ') as proteins 
+FROM Drugbank LEFT JOIN BindingDB ON Drugbank.drug_id = BindingDB.drug_id 
+GROUP BY  Drugbank.drug_id """)
+    return jsonify(data=cursor.fetchall())
+
 
 @app.route('/user15', methods=['GET', 'POST'])
 def user15():
