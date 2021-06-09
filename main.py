@@ -14,8 +14,8 @@ app = Flask(__name__)
 app.secret_key = 'my number one'
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = 'Orac135421'
-app.config['MYSQL_DB'] = 'pythonlogin'
+app.config['MYSQL_PASSWORD'] = 'abc123'
+app.config['MYSQL_DB'] = 'sample'
 
 mysql = MySQL(app)
 
@@ -387,7 +387,7 @@ def userTargetsforSpecDrug():
         # Create variables for easy access
         drug_id = request.form['drug_id']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT BindingDB.uniprot_id, Uniprot.target_name FROM BindingDB INNER JOIN Uniprot ON BindingDB.uniprot_id=Uniprot.uniprot_id WHERE BindingDB.drug_id='{}'".format(drug_id))
+        cursor.execute("SELECT DISTINCT BindingDB.uniprot_id, Uniprot.target_name FROM BindingDB INNER JOIN Uniprot ON BindingDB.uniprot_id=Uniprot.uniprot_id WHERE BindingDB.drug_id='{}'".format(drug_id))
         return jsonify(data=cursor.fetchall())
     else:
         msg = 'There is no such drug'
@@ -400,7 +400,7 @@ def userInteractingDrugsforSpecProt():
         # Create variables for easy access
         uniprot_id = request.form['uniprot_id']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT Drugbank.drug_id, Drugbank.drug_name FROM BindingDB INNER JOIN Drugbank ON BindingDB.drug_id=Drugbank.drug_id WHERE BindingDB.uniprot_id='{}'".format(uniprot_id))
+        cursor.execute("SELECT DISTINCT Drugbank.drug_id, Drugbank.drug_name FROM BindingDB INNER JOIN Drugbank ON BindingDB.drug_id=Drugbank.drug_id WHERE BindingDB.uniprot_id='{}'".format(uniprot_id))
         return jsonify(data=cursor.fetchall())
     else:
         msg = 'There is no such drug'
