@@ -29,3 +29,7 @@
 * While running the code in Mac, if there is an error like: NameError: name '_mysql' is not defined
 * You can first run the command: export DYLD_LIBRARY_PATH="/usr/local/mysql/lib:$PATH"
 * And run : python3 main.py
+
+# Application
+* Now, if you can succesfully configure the database connection, created tables and triggers and inserted the test data and run the code
+* you can go to http://127.0.0.1:5000/ log in and use the functionalities.
