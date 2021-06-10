@@ -5,7 +5,7 @@ from datetime import datetime
 import MySQLdb.cursors
 import re
 from flask import jsonify
-
+import hashlib
 
 app = Flask(__name__)
 #app.config['SECRET_KEY'] = 'abiduduidudu'
@@ -19,6 +19,11 @@ app.config['MYSQL_DB'] = 'sample'
 
 mysql = MySQL(app)
 
+def hash_string(string):
+    """
+    Return a SHA-256 hash of the given string
+    """
+    return hashlib.sha256(string.encode('utf-8')).hexdigest()
 
 @app.route("/")
 def hello_world():
@@ -37,6 +42,7 @@ def userLogin():
         # Create variables for easy access
         username = request.form['username']
         password = request.form['password']
+        password = hash_string(password)
         institution = request.form['institution']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute('SELECT * FROM users WHERE username = %s AND password = %s AND institution = %s', (username, password,institution))
@@ -64,6 +70,7 @@ def managerLogin():
         # Create variables for easy access
         username = request.form['username']
         password = request.form['password']
+        password = hash_string(password)
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute('SELECT * FROM databasemanager WHERE username = %s AND password = %s', (username, password))
         account = cursor.fetchone()
@@ -96,6 +103,7 @@ def addUser():
         # Create variables for easy access
         username = request.form['username']
         password = request.form['password']
+        password = hash_string(password)
         name = request.form['name']
         institution = request.form['institution']
         con = mysql.connection
@@ -181,6 +189,7 @@ def req5insertUser():
         username = request.form['username']
         name = request.form['name']
         password = request.form['password']
+        password = hash_string(password)
         con = mysql.connection
         cursor = con.cursor(MySQLdb.cursors.DictCursor)
         
@@ -223,6 +232,7 @@ def req5deleteUser():
         username = request.form['username']
         name = request.form['name']
         password = request.form['password']
+        password = hash_string(password)
         con = mysql.connection
         cursor = con.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute("""select distinct C.doi, R.reaction_id, C.institution from 
