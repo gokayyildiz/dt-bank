@@ -5,7 +5,7 @@ from datetime import datetime
 import MySQLdb.cursors
 import re
 from flask import jsonify
-
+import hashlib
 
 app = Flask(__name__)
 #app.config['SECRET_KEY'] = 'abiduduidudu'
@@ -19,6 +19,11 @@ app.config['MYSQL_DB'] = 'sample'
 
 mysql = MySQL(app)
 
+def hash_string(string):
+    """
+    Return a SHA-256 hash of the given string
+    """
+    return hashlib.sha256(string.encode('utf-8')).hexdigest()
 
 @app.route("/")
 def hello_world():
@@ -33,17 +38,20 @@ def about():
 @app.route("/userLogin", methods=['GET', 'POST'])
 def userLogin():
     msg =''
-    if request.method == 'POST' and 'username' in request.form and 'password' in request.form:
+    if request.method == 'POST' and 'username' in request.form and 'password' in request.form and 'institution' in request.form:
         # Create variables for easy access
         username = request.form['username']
         password = request.form['password']
+        password = hash_string(password)
+        institution = request.form['institution']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute('SELECT * FROM users WHERE username = %s AND password = %s', (username, password,))
+        cursor.execute('SELECT * FROM users WHERE username = %s AND password = %s AND institution = %s', (username, password,institution))
         account = cursor.fetchone()
         if account:
             # Create session data, we can access this data in other routes
             session['loggedin'] = True
             session['username'] = account['username']
+            session['institution'] = account['institution']
             session['password'] = account['password']
             # Redirect to home page
             return redirect(url_for('userHome'))
@@ -52,7 +60,7 @@ def userLogin():
             msg = 'Incorrect username/password!'
 
 
-    return render_template('login.html', msg=msg)
+    return render_template('userlogin.html', msg=msg)
 
 
 @app.route("/managerLogin", methods=['GET', 'POST'])
@@ -62,8 +70,9 @@ def managerLogin():
         # Create variables for easy access
         username = request.form['username']
         password = request.form['password']
+        password = hash_string(password)
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute('SELECT * FROM databasemanager WHERE username = %s AND password = %s', (username, password,))
+        cursor.execute('SELECT * FROM databasemanager WHERE username = %s AND password = %s', (username, password))
         account = cursor.fetchone()
         if account:
             # Create session data, we can access this data in other routes
@@ -77,7 +86,7 @@ def managerLogin():
             msg = 'Incorrect username/password!'
 
 
-    return render_template('login.html', msg=msg)
+    return render_template('managerlogin.html', msg=msg)
 
 @app.route("/userHome", methods=['GET', 'POST'])
 def userHome():
@@ -94,6 +103,7 @@ def addUser():
         # Create variables for easy access
         username = request.form['username']
         password = request.form['password']
+        password = hash_string(password)
         name = request.form['name']
         institution = request.form['institution']
         con = mysql.connection
@@ -117,12 +127,12 @@ def req3Affinity():
         con = mysql.connection
         cursor = con.cursor(MySQLdb.cursors.DictCursor)
         
-        cursor.execute('SELECT reaction_research.reaction_id FROM reaction_research WHERE reaction_id = {}'.format(reaction_id))
+        cursor.execute('SELECT reaction_research.reaction_id FROM reaction_research WHERE reaction_id = "{}"'.format(reaction_id))
         if cursor.fetchone() is None:
             return "<h1>Given reaction not found</h1>"
         
         try:
-            cursor.execute('UPDATE reaction_research SET affinity ={} WHERE reaction_id ={}'.format(affinity, reaction_id))
+            cursor.execute('UPDATE reaction_research SET affinity ={} WHERE reaction_id ="{}"'.format(affinity, reaction_id))
             con.commit()
             return ("<h1>Update Succesful</h1>")
         except Exception as err:
@@ -170,6 +180,80 @@ def deleteProtein():
             return Response(str(err), status=403)       
 
     return render_template('req4Prot.html')  
+
+@app.route("/req5insertUser", methods=['GET', 'POST'])
+def req5insertUser():
+    if request.method == 'POST' and 'reaction_id' in request.form and 'username' in request.form and 'name' in request.form and 'password' in request.form  :
+        # Create variables for easy access
+        reaction_id = request.form['reaction_id']
+        username = request.form['username']
+        name = request.form['name']
+        password = request.form['password']
+        password = hash_string(password)
+        con = mysql.connection
+        cursor = con.cursor(MySQLdb.cursors.DictCursor)
+        
+        cursor.execute("""SELECT U.institution, username, password, name, doi from 
+                            (SELECT DISTINCT @institution := C.institution, C.doi FROM Contribution_Paper C, Reaction_Research R WHERE
+                            C.doi = R.doi and R.reaction_id = '{}') as t1, Users U
+                            WHERE U.institution = @institution and
+                            username = '{}' and password='{}' and   
+                            name = '{}' """.format(reaction_id,username,password,name))
+        decide =cursor.fetchone()
+        
+        if decide is not None:
+            institution=decide['institution']
+            doi = decide['doi']
+            cursor.execute("""INSERT INTO Contribution_Paper 
+                            Values ('{}','{}','{}') """.format(username,institution,doi))
+            con.commit()                
+            return ("Insertion is successful, no need to create a new user")
+
+        else: #seeam seam burası boşsa şimdik user da yarataceuz
+            cursor.execute("""select distinct C.doi, R.reaction_id, C.institution from 
+            Contribution_Paper C, Reaction_Research R where C.doi=R.doi and R.reaction_id = '{}'; """.format(reaction_id))
+            case2=cursor.fetchone()
+            doi=case2['doi']
+            institution=case2['institution']
+            print(case2)
+            cursor.execute("""insert into users values ('{}','{}','{}','{}') """.format(username,name,institution,password))
+            cursor.execute("""insert into contribution_paper values ('{}','{}','{}')""".format(username,institution,doi))
+            con.commit()
+            return ("<h1>new user created, and inserted to the corresponding doi wrt the reaction_id<h1/>")
+    return render_template('req5insertUser.html')  
+
+#acaba burda passwordler falan neden veriliyor? 
+
+@app.route("/req5deleteUser", methods=['GET', 'POST'])
+def req5deleteUser():
+    if request.method == 'POST' and 'reaction_id' in request.form and 'username' in request.form and 'name' in request.form and 'password' in request.form  :
+        # Create variables for easy access
+        reaction_id = request.form['reaction_id']
+        username = request.form['username']
+        name = request.form['name']
+        password = request.form['password']
+        password = hash_string(password)
+        con = mysql.connection
+        cursor = con.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("""select distinct C.doi, R.reaction_id, C.institution from 
+        Contribution_Paper C, Reaction_Research R where C.doi=R.doi and R.reaction_id = '{}'; """.format(reaction_id))
+        case2=cursor.fetchone()
+        institution=case2['institution']
+        doi = case2['doi']
+        cursor.execute("""select * from users where username = '{}' and name = '{}' and 
+                        institution = '{}' 
+                        and password = '{}' """.format(username,name,institution,password))
+        if cursor.fetchone() is None:
+            return ("There is no such user and paper to delete!")
+        else:    
+            cursor.execute("""delete from Contribution_Paper where 
+            username = '{}' and institution = '{}' and doi = '{}'""".format(username,institution,doi))
+            con.commit()
+            return ("<h1>deletion successful<h1>")      
+
+    return render_template('req5deleteUser.html')  
+
+
 
 #see users ?
 @app.route("/managerSeeUsers", methods=['GET', 'POST'])
@@ -259,7 +343,7 @@ def seeDetailedDrug():
                             FROM (select d.drug_id AS dr1,  GROUP_CONCAT(e.side_effect_name SEPARATOR ', ') as side_effect_names
                             from drugbank as d, SIDER as s, sideeffect as e
                             where d.drug_id = s.drug_id and s.umls_cui = e.umls_cui
-                            GROUP BY d.drug_id) as X  LEFT JOIN (select  b.drug_id as dr2, GROUP_CONCAT(u.target_name SEPARATOR ', ') as target_names
+                            GROUP BY d.drug_id) as X  LEFT JOIN (select  b.drug_id as dr2, GROUP_CONCAT(DISTINCT u.target_name SEPARATOR ', ') as target_names
                             from bindingdb as b, uniprot as u
                             where b.uniprot_id = u.uniprot_id
                             group by b.drug_id) as Y ON X.dr1 = Y.dr2
@@ -268,7 +352,7 @@ def seeDetailedDrug():
                             FROM (select d.drug_id as dr1,  GROUP_CONCAT(e.side_effect_name SEPARATOR ', ') as side_effect_names
                             from drugbank as d, SIDER as s, sideeffect as e
                             where d.drug_id = s.drug_id and s.umls_cui = e.umls_cui
-                            GROUP BY d.drug_id) as X  RIGHT JOIN (select  b.drug_id as dr2, GROUP_CONCAT(u.target_name SEPARATOR ', ') as target_names
+                            GROUP BY d.drug_id) as X  RIGHT JOIN (select  b.drug_id as dr2, GROUP_CONCAT(DISTINCT u.target_name SEPARATOR ', ') as target_names
                             from bindingdb as b, uniprot as u
                             where b.uniprot_id = u.uniprot_id
                             group by b.drug_id) as Y ON X.dr1 = Y.dr2) AS Z ON d.drug_id = Z.dr1 OR d.drug_id = Z.dr2""")
@@ -284,7 +368,8 @@ def userInteractionofaDrug():
         # Create variables for easy access
         main_drug = request.form['main_drug']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT interacting_drug FROM Drug_Interaction WHERE main_drug ='{}'".format(main_drug))
+        cursor.execute("""select interacting_drug, drug_name from Drug_Interaction I, drugbank D where main_drug='{}' 
+and D.drug_id=I.interacting_drug""".format(main_drug))
         return jsonify(data=cursor.fetchall())
     else:
         msg = 'There is no such drug'
@@ -299,7 +384,7 @@ def userdrugSideEffects():
         # Create variables for easy access
         drug_id = request.form['drug_id']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT SIDER.drug_id, SideEffect.side_effect_name FROM SideEffect INNER JOIN SIDER ON SIDER.umls_cui=SideEffect.umls_cui WHERE SIDER.drug_id='{}'".format(drug_id))
+        cursor.execute("SELECT SIDER.umls_cui, SideEffect.side_effect_name FROM SideEffect INNER JOIN SIDER ON SIDER.umls_cui=SideEffect.umls_cui WHERE SIDER.drug_id='{}'".format(drug_id))
         return jsonify(data=cursor.fetchall())
     else:
         msg = 'There is no such drug'
@@ -313,7 +398,7 @@ def userTargetsforSpecDrug():
         # Create variables for easy access
         drug_id = request.form['drug_id']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT BindingDB.uniprot_id, Uniprot.target_name FROM BindingDB INNER JOIN Uniprot ON BindingDB.uniprot_id=Uniprot.uniprot_id WHERE BindingDB.drug_id='{}'".format(drug_id))
+        cursor.execute("SELECT DISTINCT BindingDB.uniprot_id, Uniprot.target_name FROM BindingDB INNER JOIN Uniprot ON BindingDB.uniprot_id=Uniprot.uniprot_id WHERE BindingDB.drug_id='{}'".format(drug_id))
         return jsonify(data=cursor.fetchall())
     else:
         msg = 'There is no such drug'
@@ -326,7 +411,7 @@ def userInteractingDrugsforSpecProt():
         # Create variables for easy access
         uniprot_id = request.form['uniprot_id']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT Drugbank.drug_id, Drugbank.drug_name FROM BindingDB INNER JOIN Drugbank ON BindingDB.drug_id=Drugbank.drug_id WHERE BindingDB.uniprot_id='{}'".format(uniprot_id))
+        cursor.execute("SELECT DISTINCT Drugbank.drug_id, Drugbank.drug_name FROM BindingDB INNER JOIN Drugbank ON BindingDB.drug_id=Drugbank.drug_id WHERE BindingDB.uniprot_id='{}'".format(uniprot_id))
         return jsonify(data=cursor.fetchall())
     else:
         msg = 'There is no such drug'
@@ -335,24 +420,23 @@ def userInteractingDrugsforSpecProt():
 @app.route('/user13', methods=['GET', 'POST'])
 def user13():
     msg =''
-    if request.method == 'POST':
         # Create variables for easy access
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute('SELECT DISTINCT Uniprot.uniprot_id, BindingDB.drug_id FROM UniProt LEFT JOIN BindingDB ON Uniprot.uniprot_id = BindingDB.uniprot_id ORDER BY uniprot_id ASC, drug_id ASC')
-        return jsonify(data=cursor.fetchall())
-    else:
-        msg = 'There is no such drug'
-    return render_template('user13.html', msg=msg)        
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("""SELECT DISTINCT Uniprot.uniprot_id, GROUP_CONCAT(DISTINCT BindingDB.drug_id SEPARATOR ', ') as drugs 
+FROM UniProt LEFT JOIN BindingDB ON Uniprot.uniprot_id = BindingDB.uniprot_id 
+GROUP BY  Uniprot.uniprot_id""")
+    return jsonify(data=cursor.fetchall())
+      
 
 @app.route('/user14', methods=['GET', 'POST'])
 def user14():
-    msg =''
-    if request.method == 'POST':
         # Create variables for easy access
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute('SELECT  Drugbank.drug_id, BindingDB.uniprot_id FROM Drugbank LEFT JOIN BindingDB ON Drugbank.drug_id = BindingDB.drug_id ORDER BY drug_id ASC, uniprot_id ASC')
-        return jsonify(data=cursor.fetchall())
-    return render_template('user14.html', msg=msg)  
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("""SELECT  Drugbank.drug_id, GROUP_CONCAT(DISTINCT BindingDB.uniprot_id SEPARATOR ', ') as proteins 
+FROM Drugbank LEFT JOIN BindingDB ON Drugbank.drug_id = BindingDB.drug_id 
+GROUP BY  Drugbank.drug_id """)
+    return jsonify(data=cursor.fetchall())
+
 
 @app.route('/user15', methods=['GET', 'POST'])
 def user15():
@@ -375,7 +459,7 @@ def user16():
         keyword = request.form['keyword']
         keyword = "%"+keyword+"%"
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT * FROM Drugbank WHERE description_ LIKE '{}'".format(keyword))
+        cursor.execute("SELECT drug_id, drug_name, description_ FROM Drugbank WHERE description_ LIKE '{}'".format(keyword))
         return jsonify(data=cursor.fetchall())
     else:
         msg = 'There is no such drug'
@@ -388,22 +472,13 @@ def user17():
         # Create variables for easy access
         uniprot_id = request.form['uniprot_id']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("""select drug_id, count(*) as total from  
-                        (select distinct SIDER.drug_id,SIDER.umls_cui,
-                        uniprot_id from SIDER 
-                        INNER JOIN BindingDB 
-                        ON SIDER.drug_id=BindingDB.drug_id 
-                        WHERE uniprot_id = '{}') as b 
-                        group by drug_id 
-                        having total in ( 
-                        select min(total) from (select 
-                        count(*) as total from 
-                        (select distinct SIDER.drug_id,SIDER.umls_cui,
-                        uniprot_id from SIDER 
-                        INNER JOIN BindingDB 
-                        ON SIDER.drug_id=BindingDB.drug_id 
-                        WHERE uniprot_id = '{}') as b2 
-                        group by drug_id)as b3)""".format(uniprot_id,uniprot_id))
+        cursor.execute("""select distinct t1.drug_id, drug_name, totals, uniprot_id from
+(select D.drug_id, drug_name, count(*) as totals from drugbank D, SIDER S where d.drug_id=s.drug_id 
+group by D.drug_id) as t1, bindingdb b where t1.drug_id=b.drug_id and b.uniprot_id='{}'
+having totals in ( 
+select min(totals) from (select distinct t1.drug_id, drug_name, totals, uniprot_id from
+(select D.drug_id, drug_name, count(*) as totals from drugbank D, SIDER S where d.drug_id=s.drug_id 
+group by D.drug_id) as t1, bindingdb b where t1.drug_id=b.drug_id and b.uniprot_id='{}') as t3)""".format(uniprot_id,uniprot_id))
         return jsonify(data=cursor.fetchall())
     else:
         msg = 'There is no such drug'
@@ -424,40 +499,35 @@ def userSeePapers():
  
     return jsonify(data=cursor.fetchall())
 
+@app.route("/userSeeRankings", methods=['GET'])
+def userSeeRankings():
+    con = mysql.connection
+    cursor = con.cursor(MySQLdb.cursors.DictCursor)
+    try:
+        cursor.execute("""select * from institutions order by points desc""")
+    except Exception as err:
+        return Response(str(err), status=403)  
+ 
+    return jsonify(data=cursor.fetchall())
+
+
+
+@app.route('/userSeeFilteredTargets', methods=['GET', 'POST'])
+def userSeeFilteredTargets():
+    msg =''
+    if request.method == 'POST' and 'measure_type' in request.form and 'min_affinity' in request.form and 'max_affinity' in request.form and 'drug_id' in request.form:
+        # Create variables for easy access
+        measure_type = request.form['measure_type']
+        min_affinity= request.form['min_affinity']
+        max_affinity= request.form['max_affinity']
+        drug_id = request.form['drug_id']
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("""call getFilteredTargets('{}',{},{},'{}')""".format(measure_type, min_affinity,max_affinity,drug_id))
+        return jsonify(data=cursor.fetchall())
+    else:
+        msg = 'Parameters are not suitably provided!'
+    return render_template('userSeeFilteredTargets.html', msg=msg)   
+
 if __name__=='__main__':
     app.run(debug=True)
 
-
-"""
-13
-SELECT DISTINCT Uniprot.uniprot_id, BindingDB.drug_id FROM UniProt 
-LEFT JOIN BindingDB ON Uniprot.uniprot_id = BindingDB.uniprot_id
-14
-SELECT  Drugbank.drug_id, BindingDB.uniprot_id FROM Drugbank 
-LEFT JOIN BindingDB ON Drugbank.drug_id = BindingDB.drug_id
-15
-SELECT Drugbank.drug_id, Drugbank.drug_name FROM SIDER 
-INNER JOIN Drugbank 
-ON Drugbank.drug_id = SIDER.drug_id
-WHERE SIDER.umls_cui = %s
-16
-SELECT * FROM
-Drugbank WHERE description_ LIKE '%{dummy string}%'
-17
-select drug_id, count(*) as total from 
-(select distinct SIDER.drug_id,SIDER.umls_cui,
-uniprot_id from SIDER
-INNER JOIN BindingDB
-ON SIDER.drug_id=BindingDB.drug_id
-WHERE uniprot_id = 'uni1') as b
-group by drug_id
-having total in (
-select min(total) from (select 
-count(*) as total from 
-(select distinct SIDER.drug_id,SIDER.umls_cui,
-uniprot_id from SIDER
-INNER JOIN BindingDB
-ON SIDER.drug_id=BindingDB.drug_id
-WHERE uniprot_id = 'uni1') as b2
-group by drug_id)as b3)
-"""
