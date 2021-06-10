@@ -368,7 +368,8 @@ def userInteractionofaDrug():
         # Create variables for easy access
         main_drug = request.form['main_drug']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT interacting_drug FROM Drug_Interaction WHERE main_drug ='{}'".format(main_drug))
+        cursor.execute("""select interacting_drug, drug_name from Drug_Interaction I, drugbank D where main_drug='{}' 
+and D.drug_id=I.interacting_drug""".format(main_drug))
         return jsonify(data=cursor.fetchall())
     else:
         msg = 'There is no such drug'
@@ -383,7 +384,7 @@ def userdrugSideEffects():
         # Create variables for easy access
         drug_id = request.form['drug_id']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT SIDER.drug_id, SideEffect.side_effect_name FROM SideEffect INNER JOIN SIDER ON SIDER.umls_cui=SideEffect.umls_cui WHERE SIDER.drug_id='{}'".format(drug_id))
+        cursor.execute("SELECT SIDER.umls_cui, SideEffect.side_effect_name FROM SideEffect INNER JOIN SIDER ON SIDER.umls_cui=SideEffect.umls_cui WHERE SIDER.drug_id='{}'".format(drug_id))
         return jsonify(data=cursor.fetchall())
     else:
         msg = 'There is no such drug'
@@ -458,7 +459,7 @@ def user16():
         keyword = request.form['keyword']
         keyword = "%"+keyword+"%"
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT * FROM Drugbank WHERE description_ LIKE '{}'".format(keyword))
+        cursor.execute("SELECT drug_id, drug_name, description_ FROM Drugbank WHERE description_ LIKE '{}'".format(keyword))
         return jsonify(data=cursor.fetchall())
     else:
         msg = 'There is no such drug'
@@ -471,22 +472,13 @@ def user17():
         # Create variables for easy access
         uniprot_id = request.form['uniprot_id']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("""select drug_id, count(*) as total from  
-                        (select distinct SIDER.drug_id,SIDER.umls_cui,
-                        uniprot_id from SIDER 
-                        INNER JOIN BindingDB 
-                        ON SIDER.drug_id=BindingDB.drug_id 
-                        WHERE uniprot_id = '{}') as b 
-                        group by drug_id 
-                        having total in ( 
-                        select min(total) from (select 
-                        count(*) as total from 
-                        (select distinct SIDER.drug_id,SIDER.umls_cui,
-                        uniprot_id from SIDER 
-                        INNER JOIN BindingDB 
-                        ON SIDER.drug_id=BindingDB.drug_id 
-                        WHERE uniprot_id = '{}') as b2 
-                        group by drug_id)as b3)""".format(uniprot_id,uniprot_id))
+        cursor.execute("""select distinct t1.drug_id, drug_name, totals, uniprot_id from
+(select D.drug_id, drug_name, count(*) as totals from drugbank D, SIDER S where d.drug_id=s.drug_id 
+group by D.drug_id) as t1, bindingdb b where t1.drug_id=b.drug_id and b.uniprot_id='{}'
+having totals in ( 
+select min(totals) from (select distinct t1.drug_id, drug_name, totals, uniprot_id from
+(select D.drug_id, drug_name, count(*) as totals from drugbank D, SIDER S where d.drug_id=s.drug_id 
+group by D.drug_id) as t1, bindingdb b where t1.drug_id=b.drug_id and b.uniprot_id='{}') as t3)""".format(uniprot_id,uniprot_id))
         return jsonify(data=cursor.fetchall())
     else:
         msg = 'There is no such drug'
@@ -530,7 +522,7 @@ def userSeeFilteredTargets():
         max_affinity= request.form['max_affinity']
         drug_id = request.form['drug_id']
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("""call getFilteredTargets('{}',{},{},{})""".format(measure_type, min_affinity,max_affinity,drug_id))
+        cursor.execute("""call getFilteredTargets('{}',{},{},'{}')""".format(measure_type, min_affinity,max_affinity,drug_id))
         return jsonify(data=cursor.fetchall())
     else:
         msg = 'Parameters are not suitably provided!'
@@ -539,43 +531,3 @@ def userSeeFilteredTargets():
 if __name__=='__main__':
     app.run(debug=True)
 
-
-"""
-call getSuitableTargets
-...
-select * from BindingDB B, uniprot U, Reaction_research R
-where B.uniprot_id=U.uniprot_id and R.reaction_id = B.reaction_id
-and measure = 'measue_type' and affinity > 'min_affinity' and 
-affinity < 'max_affinity'
-13
-SELECT DISTINCT Uniprot.uniprot_id, BindingDB.drug_id FROM UniProt 
-LEFT JOIN BindingDB ON Uniprot.uniprot_id = BindingDB.uniprot_id
-14
-SELECT  Drugbank.drug_id, BindingDB.uniprot_id FROM Drugbank 
-LEFT JOIN BindingDB ON Drugbank.drug_id = BindingDB.drug_id
-15
-SELECT Drugbank.drug_id, Drugbank.drug_name FROM SIDER 
-INNER JOIN Drugbank 
-ON Drugbank.drug_id = SIDER.drug_id
-WHERE SIDER.umls_cui = %s
-16
-SELECT * FROM
-Drugbank WHERE description_ LIKE '%{dummy string}%'
-17
-select drug_id, count(*) as total from 
-(select distinct SIDER.drug_id,SIDER.umls_cui,
-uniprot_id from SIDER
-INNER JOIN BindingDB
-ON SIDER.drug_id=BindingDB.drug_id
-WHERE uniprot_id = 'uni1') as b
-group by drug_id
-having total in (
-select min(total) from (select 
-count(*) as total from 
-(select distinct SIDER.drug_id,SIDER.umls_cui,
-uniprot_id from SIDER
-INNER JOIN BindingDB
-ON SIDER.drug_id=BindingDB.drug_id
-WHERE uniprot_id = 'uni1') as b2
-group by drug_id)as b3)
-"""
